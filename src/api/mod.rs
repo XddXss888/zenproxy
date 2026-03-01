@@ -38,10 +38,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/admin/users/:id", delete(admin::delete_user))
         .route("/api/admin/users/:id/ban", post(admin::ban_user))
         .route("/api/admin/users/:id/unban", post(admin::unban_user))
-        .route_layer(middleware::from_fn_with_state(state.clone(), admin_auth));
-
-    // Subscription routes — session or admin auth
-    let subscription_routes = Router::new()
         .route(
             "/api/subscriptions",
             get(subscription::list_subscriptions).post(subscription::add_subscription),
@@ -54,10 +50,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/subscriptions/:id/refresh",
             post(subscription::refresh_subscription),
         )
-        .route_layer(middleware::from_fn_with_state(
-            state.clone(),
-            session_or_admin_auth,
-        ));
+        .route_layer(middleware::from_fn_with_state(state.clone(), admin_auth));
 
     // Fetch/Relay/Proxies routes — handler-level auth (API key or session)
     let fetch_relay_routes = Router::new()
@@ -79,7 +72,6 @@ pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .merge(auth_routes)
         .merge(admin_routes)
-        .merge(subscription_routes)
         .merge(fetch_relay_routes)
         .merge(page_routes)
         .layer(CorsLayer::permissive())
@@ -106,33 +98,6 @@ async fn admin_auth(
     } else {
         Err(StatusCode::UNAUTHORIZED)
     }
-}
-
-async fn session_or_admin_auth(
-    State(state): State<Arc<AppState>>,
-    request: Request<axum::body::Body>,
-    next: Next,
-) -> Result<Response, StatusCode> {
-    let headers = request.headers();
-
-    // Check admin Bearer token first
-    let admin_password = &state.config.server.admin_password;
-    if let Some(auth) = headers
-        .get("authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-    {
-        if auth == admin_password {
-            return Ok(next.run(request).await);
-        }
-    }
-
-    // Check session cookie
-    if auth::extract_session_user(&state, headers).await.is_ok() {
-        return Ok(next.run(request).await);
-    }
-
-    Err(StatusCode::UNAUTHORIZED)
 }
 
 async fn user_page() -> axum::response::Html<&'static str> {
