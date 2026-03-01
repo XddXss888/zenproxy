@@ -13,7 +13,8 @@
 /deploy/config.toml
 
 # sing-box source (separate repo)
-/sing-box-dev-next/
+/sing-box-dev-next/sing-box
+/sing-box-dev-next/sing-box.exe
 
 # IDE / OS
 .claude/
